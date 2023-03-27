@@ -54,7 +54,7 @@ mainSteps:
     inputs:
       SourceImageId: '{{ createImage.newImageId }}'
       SourceRegion: ap-southeast-2
-      ImageName: 'encrypted {{ createImage.newImageId }} with CMK'
+      ImageName: 'encrypted {{ createImage.newImageId }} with CMK in automation {{ automation:EXECUTION_ID }}'
       Encrypted: true
       KmsKeyId: '{{ KmsKeyId }}'
     nextStep: verifyNewImageAvailability
