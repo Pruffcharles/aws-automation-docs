@@ -1,0 +1,105 @@
+---
+description: 'Custom Automation Create Image, encrypt with CMK and share with cross-account'
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  AutomationAssumeRole:
+    type: 'AWS::IAM::Role::Arn'
+    description: '(Required) The ARN of the role that allows Automation to perform the actions on your behalf. If no role is specified, Systems Manager Automation uses your IAM permissions to use this runbook.'
+    default: ''
+  InstanceId:
+    type: 'AWS::EC2::Instance::Id'
+    description: (Required) The ID of the EC2 instance.
+    default: ''
+  KmsKeyId:
+    type: String
+    description: (Required) The ID of the CMK to use for re-encryption before sharing.
+    default: ''
+  CrossAccountId:
+    type: String
+    description: (Required) The account ID of the cross account.
+    default: ''
+mainSteps:
+  - name: createImage
+    action: 'aws:executeAwsApi'
+    onFailure: Abort
+    inputs:
+      Service: ec2
+      Api: CreateImage
+      InstanceId: '{{ InstanceId }}'
+      Name: 'Automation Image for {{ InstanceId }}'
+      NoReboot: false
+    outputs:
+      - Name: newImageId
+        Selector: $.ImageId
+        Type: String
+    nextStep: verifyImageAvailability
+  - name: verifyImageAvailability
+    action: 'aws:waitForAwsResourceProperty'
+    timeoutSeconds: 7200
+    inputs:
+      Service: ec2
+      Api: DescribeImages
+      ImageIds:
+        - '{{ createImage.newImageId }}'
+      PropertySelector: '$.Images[0].State'
+      DesiredValues:
+        - available
+    nextStep: encryptwithCMK
+  - name: encryptwithCMK
+    action: 'aws:copyImage'
+    timeoutSeconds: 7200
+    maxAttempts: 3
+    onFailure: Abort
+    inputs:
+      SourceImageId: '{{ createImage.newImageId }}'
+      SourceRegion: ap-southeast-2
+      ImageName: 'encrypted {{ createImage.newImageId }} with CMK'
+      Encrypted: true
+      KmsKeyId: '{{ KmsKeyId }}'
+    nextStep: verifyNewImageAvailability
+  - name: verifyNewImageAvailability
+    action: 'aws:waitForAwsResourceProperty'
+    timeoutSeconds: 600
+    inputs:
+      Service: ec2
+      Api: DescribeImages
+      ImageIds:
+        - '{{ encryptwithCMK.ImageId }}'
+      PropertySelector: '$.Images[0].State'
+      DesiredValues:
+        - available
+    nextStep: ShareImage
+  - name: ShareImage
+    action: 'aws:executeScript'
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Runtime: python3.8
+      Handler: crossAccountImageSharing
+      InputPayload:
+        newImageId: '{{ encryptwithCMK.ImageId }}'
+        CrossAccountId: '{{ CrossAccountId }}'
+      Script: |-
+        def crossAccountImageSharing(events,context):
+          import boto3
+          import botocore
+
+          #Initialize client
+          ec2 = boto3.client('ec2',region_name='ap-southeast-2')
+          newImageId = events['newImageId']
+          CrossAccountId = events['CrossAccountId']
+          
+          #share AMI with cross account
+          try:
+              response = ec2.modify_image_attribute(
+                          ImageId = newImageId,
+                          Attribute = 'launchPermission',
+                          OperationType = 'add',
+                          LaunchPermission = {
+                              'Add' : [{ 'UserId': CrossAccountId }]
+                          }
+              )
+              
+          except botocore.exceptions.ClientError as error:
+              raise error
