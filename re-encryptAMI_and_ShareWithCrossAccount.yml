@@ -27,7 +27,7 @@ mainSteps:
       Service: ec2
       Api: CreateImage
       InstanceId: '{{ InstanceId }}'
-      Name: 'Automation Image for {{ InstanceId }}'
+      Name: 'Automation Image for {{ InstanceId }} with automation {{ automation:EXECUTION_ID }}'
       NoReboot: false
     outputs:
       - Name: newImageId
