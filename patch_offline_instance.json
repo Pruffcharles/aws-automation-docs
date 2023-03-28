@@ -1,0 +1,98 @@
+{
+    "description": "Systems Manager Automation - Starts EC2 instances, install patches, and stops them.",
+    "schemaVersion": "0.3",
+    "assumeRole": "{{AutomationAssumeRole}}",
+    "parameters": {
+      "InstanceId": {
+        "type": "StringList",
+        "description": "(Required) ID of the Instance to patch. Only specify when not running from Maintenance Windows."
+      },
+      "WaitForReboot": {
+        "type": "String",
+        "description": "(Optional) How long Automation should sleep for, to allow a patched instance to reboot",
+        "default": "PT5M"
+      },
+      "WaitForInstance": {
+        "type": "String",
+        "description": "(Optional) How long Automation should sleep for, to allow the instance come back into service",
+        "default": "PT2M"
+      },
+      "AutomationAssumeRole": {
+        "type": "AWS::IAM::Role::Arn",
+        "description": "(Optional) The ARN of the role that allows Automation to perform the actions on your behalf.",
+        "default": ""
+      }
+    },
+    "mainSteps": [
+        {
+            "name": "startInstances",
+            "action": "aws:changeInstanceState",
+            "inputs": {
+              "InstanceIds": "{{ InstanceId }}",
+              "DesiredState": "running"
+            }
+          },
+        {
+            "name": "describeManagedInstance",
+            "action": "aws:waitForAwsResourceProperty",
+            "onFailure": "Abort",
+            "inputs": {
+              "Service": "ssm",
+              "Api": "DescribeInstanceInformation",
+            "PropertySelector": "$.InstanceInformationList[0].PingStatus", 
+            "DesiredValues": [ "Online" ],
+            "InstanceInformationFilterList": [
+                {
+                  "key": "InstanceIds",
+                  "valueSet": [
+                    "{{ InstanceId }}"
+                  ]
+                }
+              ]
+            },
+            "isCritical": "true",
+            "nextStep": "installMissingOSUpdates"
+          },
+      {
+        "name": "installMissingOSUpdates",
+        "action": "aws:runCommand",
+        "maxAttempts": 1,
+        "onFailure": "Continue",
+        "inputs": {
+          "DocumentName": "AWS-RunPatchBaseline",
+          "InstanceIds": [
+            "{{InstanceId}}"
+          ],
+          "Parameters": {
+            "Operation": "Install"
+          }
+        }
+      },
+      {
+        "name": "SleepToCompleteInstall",
+        "action": "aws:sleep",
+        "inputs": {
+          "Duration": "{{WaitForReboot}}"
+        }
+      },
+      {
+        "name": "stopInstances",
+        "action": "aws:changeInstanceState",
+        "onFailure": "Continue",
+        "inputs": {
+          "InstanceIds": "{{ InstanceId }}",
+          "DesiredState": "stopped"
+        }
+      },
+      {
+        "name": "forceStopInstances",
+        "action": "aws:changeInstanceState",
+        "inputs": {
+          "InstanceIds": "{{ InstanceId }}",
+          "CheckStateOnly": false,
+          "DesiredState": "stopped",
+          "Force": true
+        }
+      }
+    ]
+  }
