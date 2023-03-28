@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+{% load static %}
+{% load crispy_forms_tags %}
+
+<html>
+
+<head>
+	<title>Property Sales</title>
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1" />
+
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+  <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+  <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" 
+        integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" 
+        crossorigin="anonymous">
+
+  <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+        
+  <script type="text/javascript">
+                  var user = '{{request.user}}'
+
+              function getToken(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        // Does this cookie string begin with the name we want?
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+              return cookieValue;
+              }
+            const csrftoken = getToken('csrftoken');
+
+            function getCookie(name) {
+            var cookieArr = document.cookie.split(";");
+                for(var i=0; i<cookieArr.length; i++){
+                  var cookiePair = cookieArr[i].split("=");
+                    if(name ==cookiePair[0].trim()){
+                        return decodeURIComponent(cookiePair[1]);
+                    }
+                }
+                return null;
+              }
+              var cart = JSON.parse(getCookie('cart'))
+              if(cart == undefined){
+                cart = {}
+                console.log('Cart was created!')
+                document.cookie = 'cart=' + JSON.stringify(cart) +";domain=;path=/"
+              }
+              console.log('cart: ', cart)
+
+  </script>
+</head>
+
+
+<body>
+  <div class="body-div">
+    <div id="content-wrap">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+          <a class="navbar-brand" href="{% url 'store' %}">Property Sales</a>
+          <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+        
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+              <li class="nav-item active">
+                <a class="nav-link" href="{% url 'sale_store' %}">SALE<span class="sr-only">(current)</span></a>
+              </li>
+              <li class="nav-item active">
+                <a class="nav-link" href="{% url 'rental_store' %}">RENT<span class="sr-only">(current)</span></a>
+              </li>
+              <!-- <li class="nav-item active">
+                <a class="nav-link" href="#">COMPANIES<span class="sr-only">(current)</span></a>
+              </li>  -->
+              <li class="nav-item active dropdown">
+                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">COMPANIES</a>
+                <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                  <a class="dropdown-item" href="#">AGENTS</a>
+                  <a class="dropdown-item" href="#">PROPERTY DEVELOPERS</a>
+                </div>
+              </li>
+              <li class="nav-item active">
+                <a class="nav-link" href="{% url 'request' %}">REQUEST<span class="sr-only">(current)</span></a>
+              </li>
+              <li class="nav-item active">
+                <a class="nav-link" href="{% url 'store' %}">MARKET TRENDS<span class="sr-only">(current)</span></a>
+              </li>
+              <li class="nav-item active">
+                <a class="nav-link" href="{% url 'register' %}">REGISTER <span class="sr-only">(current)</span></a>
+              </li>
+            </ul>
+            <div class="form-inline my-2 my-lg-0">
+              {% if user.is_authenticated %}
+                  <span id="hello-msg">Hello, {{request.user}}</span>
+                  <span><a href="{% url 'logout' %}" class="btn btn-warning">Logout</a></span>
+              {% else %}  
+                  <span id="hello-msg">Hello, there</span>
+                  <span><a href="{% url 'login' %}" class="btn btn-warning">Login</a></span>
+              {% endif %}
+              
+              <a href="{% url 'cart' %}">
+                <img  id="cart-icon" src="{% static 'images/cart.png' %}">
+              </a>
+              <p id="cart-total">{{cartItems}}</p>
+        
+            </div>
+          </div>
+        </nav>
+
+<div class="container">
+   <section id="section-div">
+       <div class="jumbotron"  style="margin-top: 50px;">
+            <form action="" method="GET"  action="{% url 'search' %}">
+              {% csrf_token %}
+              <div class="row" style="padding-bottom: 15px;">
+                
+                  <div class="col-md-12" class=" requiredField" id="job_type">
+                    <input id="location" name="location" placeholder="Enter a state, locality or area" data-results="all" type="text" class="form-control" autocomplete="on">        
+              
+                  </div>
+           
+                </div> 
+                <div class="row">
+                  <div id="div_id_job_type" class="col-md-4" class="form-group"  >
+                  
+                      <label for="id_job_type" class=" requiredField">
+                          Sale Method<span class="asteriskField">*</span>
+                      </label>
+                                                   
+              <div class="">
+                      <select name="mode" class="select form-control" required id="mode">
+            <option value="" selected>Select</option>
+                                     
+            <option value="2">SALE</option>
+            <option value="1" >RENTAL</option>
+            <option value="3">SHORT-LET</option>
+          
+          </select>
+                              
+          </div>    
+              </div>
+     
+                  
+          <div class="col-md-4">
+                               
+              
+              <div id="div_id_dept" class="form-group">
+                  
+                      <label for="id_dept" class=" requiredField">
+                          Property Type<span class="asteriskField">*</span>
+                      </label>
+                
+                  
+                      
+                          <div class="">
+                              <select name="spec" class="select form-control" required id="spec">
+            <option value="" selected>Select</option>
+          
+            <option value="2">FLAT</option>
+            <option value="3" >HOUSE</option>
+            <option value="4">LAND</option>
+            <option value="5">COMMERCIAL PROPERTY</option>
+          </select>
+                 </div>
+               
+                  
+              </div>
+              
+          
+          
+                  </div>
+                 
+                  <div class="col-md-4">
+                      
+          
+          
+              
+              <div id="div_id_status" class="form-group">
+                  
+                      <label for="id_status" class=" requiredField">
+                          Bedrooms<span class="asteriskField">*</span>
+                      </label>
+                
+                      
+                          <div class="">
+                              <select name="bedroom" class="select form-control" required id="bedroom">
+           
+                                <option value="1">ONE</option>
+                                <option value="2" >TWO</option>
+                                <option value="3">THREE</option>
+                                <option value="4">FOUR </option>
+                                <option value="5">FIVE</option>
+          
+          </select>
+          </div>
+                      
+                  
+              </div>
+              
+          
+          
+                  </div>
+                  
+              </div>
+             
+              <div class="row">
+                <div class="col-md-8">
+                    <button type="submit" class="btn btn-success btn-block btn-lg"><i class="fas fa-database"></i>
+                       Submit</button>
+                </div>
+                                    
+                <div class="col-md-4">
+                    <a href="{% url 'store' %}" class="btn btn-secondary btn-block btn-lg">
+                        <i class="fas fa-stream"></i> Back to Home
+                    </a>
+                </div>
+            </div>
+          </div>
+        </form>
+           </section>
+                <br>
+                {% block content %}
+                {% endblock content %}
+         </div>
+  
+         <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js" 
+         integrity="sha256-KzZiKy0DWYsnwMF+X1DvQngQ2/FxF7MF3Ff72XcpuPs=" 
+         crossorigin="anonymous"></script>
+         <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+         <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
+
+	<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+  
+  <script type="text/javascript" src="{% static 'js/cart.js' %}"></script>
+
+  
+</div>
+<footer class="page-footer font-small footer-div">
+
+  <!-- Footer Elements -->
+  <div class="container">
+
+    <!-- Grid row-->
+    <div class="row">
+
+      <!-- Grid column -->
+      
+    </div>
+    <!-- Grid row -->
+
+  </div>
+  <!-- Footer Elements -->
+
+  <!-- Copyright -->
+  <div class="footer-copyright text-center white-text py-3">© 2020 Copyright:
+    <a href="https://mdbootstrap.com/"> Chalice-Ville Solutions</a>
+  </div>
+  <!-- Copyright -->
+
+</footer>
+</div>
+<script>
+  $(function () {
+      $('#location').autocomplete({
+         source: "{% url 'Location_insert' %}",
+         minLength: 2,
+        //  data : injectCsrfToken(form.name),
+        //  type: 'GET',
+      });
+ });
+
+</script>
+</body>
+
+</html>

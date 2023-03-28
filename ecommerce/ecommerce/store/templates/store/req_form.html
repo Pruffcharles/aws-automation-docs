@@ -1,0 +1,55 @@
+
+{% extends "store/main.html" %}
+{% load crispy_forms_tags %}
+
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Requests</h1>
+    <p class="lead font-italic">Kindly complete the form below to log a request with Property Sales</p>
+    <hr class="my-4">
+
+<form action="" method="post" autocomplete="off">
+    {% csrf_token %}
+    <div class="row" style="padding-bottom:5px">
+        <div class="col-md-4">
+            {{ form.name |as_crispy_field}}
+        </div>
+        
+        <div class="col-md-4">
+            {{ form.email |as_crispy_field }}
+        </div>
+
+        <div class="col-md-4">
+            {{ form.phone |as_crispy_field}}
+        </div>
+
+    </div>
+    <div class="row" style="padding-bottom: 20px;">
+        <div class="col-md-12">
+            {{ form.request|as_crispy_field }}
+        </div>
+
+    </div>
+   
+    <div class="row">
+        <div class="col-md-8">
+            <button type="submit" class="btn btn-success btn-block btn-lg"><i class="fas fa-database"></i>
+                Submit</button>
+        </div>
+                            
+        <div class="col-md-4">
+            <a href="{% url 'store' %}" class="btn btn-secondary btn-block btn-lg">
+                <i class="fas fa-stream"></i> Properties
+            </a>
+        </div>
+    </div>
+
+</form>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js" integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg==" crossorigin="anonymous"></script>
+<script type="text/javascript">
+    document.getElementById('section-div').innerHTML = ""
+</script>
+{% endblock content %}

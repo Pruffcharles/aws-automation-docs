@@ -1,0 +1,84 @@
+{% extends 'store/main.html' %}
+{% load static %}
+{% block content %}
+{% load humanize %}
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="box-element">
+			<div>
+
+			<img id=featured src="{{product.imageURL}}">
+			<div class="top-right"><span class="badge badge-secondary" style="margin-right: 5px;">{{product.mode}}</span></div>
+		</div>
+			<div id="slide-wrapper" >
+				<img id="slideLeft" class="arrow" src="{% static 'images/arrow-left.png' %}">
+
+				<div id="slider">
+                    {% for image in product.image_set.all %}
+                        <img class="thumbnail2" src="   
+                        {{image.imageURL}}">
+                    {% endfor%}
+				</div>
+
+				<img id="slideRight" class="arrow" src="{% static 'images/arrow-right.png' %}">
+			</div>
+        </div>
+    </div>
+
+		<div class="col-lg-6">
+            <div class="box-element">
+			<h1>{{product.name}} ({{product.spec}})</h1>
+            <hr>
+            <h4>BEDROOMS <span class="badge badge-secondary">{{product.bedrooms}}</span></h4>
+            <h4>BATHROOMS <span class="badge badge-secondary">{{product.bathrooms}}</span></h4>
+            <h4>TOILETS <span class="badge badge-secondary">{{product.toilets}}</span></h4>
+
+			<h3>PRICE NGN {{product.price |intcomma}}</h3>
+
+			<p>location {{product.location}} </p>
+            <button data-action="add" data-id="{{product.id}}" class="btn btn-outline-secondary add-btn update-cart" >Add to Cart</button>
+            <a class="btn btn-outline-success" href="{% url 'store' %}">BACK TO HOME</a>
+		    </div>
+        </div>
+</div>
+
+    <script type="text/javascript">
+  
+        document.getElementById('section-div').innerHTML = ""
+         
+		let thumbnails = document.getElementsByClassName('thumbnail2')
+
+		let activeImages = document.getElementsByClassName('active2')
+
+		for (var i=0; i < thumbnails.length; i++){
+
+			thumbnails[i].addEventListener('mouseover', function(){
+				console.log(activeImages)
+				
+				if (activeImages.length > 0){
+					activeImages[0].classList.remove('active')
+				}
+				
+
+				this.classList.add('active')
+				document.getElementById('featured').src = this.src
+			})
+		}
+
+
+		let buttonRight = document.getElementById('slideRight');
+		let buttonLeft = document.getElementById('slideLeft');
+
+		buttonLeft.addEventListener('click', function(){
+			document.getElementById('slider').scrollLeft -= 180
+		})
+
+		buttonRight.addEventListener('click', function(){
+			document.getElementById('slider').scrollLeft += 180
+		})
+
+
+	</script>
+
+{% endblock content %}

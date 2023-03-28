@@ -1,0 +1,38 @@
+{% extends 'store/main.html' %}
+{% load static %}
+{% block content %}
+{% load humanize %}  
+
+
+
+
+<div class="row" style="margin-top: 10px;">
+  {% for product in products %}
+	<div class="col-lg-4" >
+        <a href="{% url 'property_type' product.id %}"><img class="thumbnail" src="{{product.imageURL}}" ></a>
+	<div class="top-right"><span class="badge badge-secondary" style="margin-right: 5px;">{{product.mode}}</span></div>
+	<div class="box-element product">
+		<h6><strong>{{product.name}}</strong></h6>
+		<hr>
+
+		<button data-action="add" data-id="{{product.id}}" class="btn btn-outline-secondary add-btn update-cart" >Add to Cart</button>
+		<a class="btn btn-outline-success" id="myBtn" href="{% url 'property_type' product.id %}">View</a>
+		<h6 style="display: inline-block; float: right"><strong>N{{product.price|intcomma}}</strong></h6>
+		<hr>
+		<div class="" style="font-size: small; background-color: rgb(230, 230, 230);" >
+			<ul style="display:inline-flex; list-style: none; margin-left: -20px; padding-top: 10px;">
+				<li><i class="fas fa-bed" aria-hidden="true"></i> <span>{{product.bedrooms}} bedrooms</span></li>
+				<li><i class="fas fa-bath" aria-hidden="true"></i> <span>{{product.bathrooms}} bathrooms</span></li>
+				<li><i class="fas fa-toilet" aria-hidden="true"></i> <span>{{product.toilets}} toilets</span></li>
+				<li><i class="fas fa-parking" aria-hidden="true"></i> <span>{{product.parkingspace}} parkingspace</span></li>
+			</ul>
+	
+		</div>
+	</div>
+	
+  </div>
+  {% endfor %}
+</div>
+
+
+{% endblock content %}
