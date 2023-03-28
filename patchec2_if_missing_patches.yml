@@ -1,0 +1,51 @@
+description: |-
+  Patch instances only if missing patches.  This solution scans the Windows server, checks if missing a patch, if missing, installs the patch. 
+  ---
+schemaVersion: '0.3'
+outputs:
+  - scan.missingPatches
+parameters:
+  InstanceId:
+    type: String
+mainSteps:
+  - name: scan
+    action: 'aws:runCommand'
+    inputs:
+      DocumentName: AWS-RunPatchBaseline
+      InstanceIds:
+        - '{{ InstanceId }}'
+      Parameters:
+        Operation: Scan
+    outputs:
+      - Name: missingPatches
+        Type: String
+        Selector: $.Output
+  - name: checkIfPatchesMissing
+    action: 'aws:branch'
+    inputs:
+      Choices:
+        - NextStep: runCommand2
+          Not:
+            Variable: '{{ scan.missingPatches }}'
+            Contains: 'MissingCount        : 0'
+        - NextStep: installPatches
+          Variable: '{{ scan.missingPatches }}'
+          Contains: 'MissingCount        : 0'
+  - name: runCommand2
+    action: 'aws:runCommand'
+    inputs:
+      DocumentName: AWS-RunPowerShellScript
+      InstanceIds:
+        - '{{ InstanceId }}'
+      Parameters:
+        commands:
+          - (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
+    isend: True
+  - name: installPatches
+    action: 'aws:runCommand'
+    inputs:
+      DocumentName: AWS-RunPatchBaseline
+      InstanceIds:
+        - '{{ InstanceId }}'
+      Parameters:
+        Operation: Install
