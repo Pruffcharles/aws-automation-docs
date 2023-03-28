@@ -31,16 +31,6 @@ mainSteps:
         - NextStep: installPatches
           Variable: '{{ scan.missingPatches }}'
           Contains: 'MissingCount        : 0'
-  - name: runCommand2
-    action: 'aws:runCommand'
-    inputs:
-      DocumentName: AWS-RunPowerShellScript
-      InstanceIds:
-        - '{{ InstanceId }}'
-      Parameters:
-        commands:
-          - (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
-    isend: True
   - name: installPatches
     action: 'aws:runCommand'
     inputs:
@@ -49,3 +39,8 @@ mainSteps:
         - '{{ InstanceId }}'
       Parameters:
         Operation: Install
+  - name: runCommand2
+    action: aws:sleep
+    inputs:
+      Duration: PT1M
+    isEnd: true
