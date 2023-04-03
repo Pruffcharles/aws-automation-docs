@@ -1,3 +1,7 @@
+# Systems Manager automation runbook to patch instances only if it contains missing KBs.
+# Author : Charles Adebayo
+# V1 : July 2021
+
 description: |-
   Patch instances only if missing patches.  This solution scans the Windows server, checks if missing a patch, if missing, installs the patch. 
   ---

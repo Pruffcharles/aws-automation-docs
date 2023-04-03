@@ -1,3 +1,7 @@
+# Systems Manager automation runbook to create an Image (AMI) of a live production instance, encrypt the AMI with a CMK, and share the re-encrypted AMI with a cross-account.
+# Author : Charles Adebayo
+# V1 : March 2023
+
 ---
 description: 'Custom Automation Create Image, encrypt with CMK and share with cross-account'
 schemaVersion: '0.3'

@@ -1,5 +1,9 @@
+// Systems Manager automation runbook to patch an offline instance.
+// Author : Charles Adebayo
+// V1 : August 2022
+
 {
-    "description": "Systems Manager Automation - Starts EC2 instances, install patches, and stops them.",
+    "description": "Systems Manager Automation runbook to patch an offline instance - Starts EC2 instances, install patches, and stops them.",
     "schemaVersion": "0.3",
     "assumeRole": "{{AutomationAssumeRole}}",
     "parameters": {
