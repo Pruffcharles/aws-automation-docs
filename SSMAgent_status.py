@@ -1,4 +1,6 @@
 # lambda function to monitor status of SSM agents on all managed nodes and ec2 instances in region and report their ConnectionLost metric to Cloudwatch.
+# Author : Charles Adebayo
+# V1 : April 2023
 
 import boto3
 import botocore
