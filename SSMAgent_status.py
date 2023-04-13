@@ -28,7 +28,7 @@ def lambda_handler(events,context):
         managed_nodes = managed_nodes['InstanceInformationList']
         status = {instance['InstanceId'] : instance['PingStatus'] for instance in managed_nodes}
         
-        # if ec2 instance is not included in the describe_instance_information() response, add it as "Missing"
+        # if ec2 instance is not included in the describe_instance_information() response, add it as "Missing" in the status report
         status.update({node: 'Missing' for node in ec2_instances if node not in status.keys()})
         
         for i in status:
@@ -51,7 +51,7 @@ def lambda_handler(events,context):
                 logger.info("Put data for metric ConnectionLost", 'EC2',  i)
             except botocore.exceptions.ClientError as error:
                 logger.exception("Couldn't put data for ConnectionLost", 'EC2',  i)
-                raise       
+                raise error     
     except botocore.exceptions.ClientError as error:
         raise error
     
