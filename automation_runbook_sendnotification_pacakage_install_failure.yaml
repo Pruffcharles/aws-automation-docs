@@ -1,0 +1,64 @@
+# Automation to send customized notifications if SSM Distributor package installation fails
+# Author : Charles Adebayo
+# V1 : April 2023
+
+description: Install OS agents required by Adebac Corporation
+schemaVersion: '0.3'
+assumeRole: '{{AutomationAssumeRole}}'
+parameters:
+   AutomationAssumeRole:
+    type: 'AWS::IAM::Role::Arn'
+    description: '(Required) The ARN of the role that allows Automation to perform the actions on your behalf. If no role is specified, Systems Manager Automation uses your IAM permissions to use this runbook.'
+    default: ''
+   InstanceId:
+    type: 'AWS::EC2::Instance::Id'
+    description: (Required) The ID of the EC2 instance.
+    default: ''
+   TopicArn:
+    type: String
+    description: (Required) The ARN of the SNS topic to publish the notification to.
+    default: ''
+mainSteps:
+  - inputs:
+      Parameters:
+        installationType: Uninstall and reinstall
+        name: NessusAgent
+        action: Install
+      InstanceIds:
+        - '{{ InstanceId }}'
+      DocumentName: AWS-ConfigureAWSPackage
+    name: InstallNessus
+    action: 'aws:runCommand'
+    onFailure: step:Sendnotification
+    isEnd: true
+  - name: Sendnotification
+    action: 'aws:executeScript'
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Runtime: python3.8
+      Handler: send_notification
+      InputPayload:
+        InstanceId: '{{InstanceId}}'
+        TopicArn: '{{TopicArn}}'
+        automationID: '{{automation:EXECUTION_ID}}'
+      Script: |-
+        def send_notification(events,context):
+          import boto3
+          import botocore
+
+          #Initialize client
+          sns= boto3.client('sns')
+          InstanceId = events['InstanceId']
+          TopicArn = events['TopicArn']
+          automation_executionID = events['automationID']
+          
+          # sends message about step failure
+          message = "There was an issue during Installation of agents on EC2 "+ InstanceId + "refer to automationID " + automation_executionID
+          try:
+              response = sns.publish(
+                    TopicArn=TopicArn,
+                    Message=message
+                )
+          except botocore.exceptions.ClientError as error:
+              raise error
