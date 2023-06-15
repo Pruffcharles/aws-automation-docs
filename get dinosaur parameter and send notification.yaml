@@ -1,0 +1,86 @@
+# Systems Manager automation runbook to show how to retreive parameters from SSM parameter store in one step and use the value in another step.
+# Author : Charles Adebayo
+# V1 : June 2023
+
+description: Custom Automation sample - get parameters ['Dinosaur_One' and 'Dinosaur_Two'] from SSM Parameter Store and publish parameter values to SNS topic,
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  AutomationAssumeRole:
+    type: 'AWS::IAM::Role::Arn'
+    description: '(Required) The ARN of the role that allows Automation to perform the actions on your behalf. If no role is specified, Systems Manager Automation uses your IAM permissions to use this runbook.'
+    default: ''
+  TopicArn:
+    type: String
+    description: (Required) The ARN of the SNS topic to publish the notification to.
+    default: ''
+mainSteps:
+  - name: retrieve_parameters
+    action: 'aws:executeScript'
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Runtime: python3.8
+      Handler: getparam
+      Script: |-
+        def getparam(events,context):
+          import boto3
+          import botocore
+
+          #Initialize client
+          ssm = boto3.client('ssm',region_name='us-east-1')
+          result = dict()
+          #GetParameters
+          try:
+            response = ssm.get_parameters(
+                Names=[
+                    'Dinosaur_One','Dinosaur_Two'
+                ],
+            )
+            result.update({
+               "valone": response['Parameters'][0]['Value'],
+               "valtwo": response['Parameters'][1]['Value']
+            })
+            
+            return result
+
+          except botocore.exceptions.ClientError as error:
+              raise error
+    outputs:
+      - Name: valone
+        Selector: $.Payload.valone
+        Type: String
+      - Name: valtwo
+        Selector: $.Payload.valtwo
+        Type: String
+  - name: Sendnotification
+    action: 'aws:executeScript'
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Runtime: python3.8
+      Handler: send_notification
+      InputPayload:
+        valone: '{{retrieve_parameters.valone}}'
+        valtwo: '{{retrieve_parameters.valtwo}}'
+        TopicArn: '{{TopicArn}}'
+      Script: |-
+        def send_notification(events,context):
+          import boto3
+          import botocore
+
+          #Initialize client
+          sns= boto3.client('sns')
+          valone = events['valone']
+          valtwo = events['valtwo']
+          TopicArn = events['TopicArn']
+          
+          #Sends notification about the parameter values
+          message = f"Here are the values of your parameters Dinosaur One is {valone} and Dinosaur Two is {valtwo}."
+          try:
+              response = sns.publish(
+                    TopicArn=TopicArn,
+                    Message=message
+                )
+          except botocore.exceptions.ClientError as error:
+              raise error

@@ -1,0 +1,182 @@
+# Systems Manager automation runbook to perform remediation action by disabling public accessibility for the Amazon RDS database instance only if it has a specific tag key and value pair. 
+# Author : Charles Adebayo
+# V1 : June 2023
+description: |
+  ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance-WithTagFilter
+
+  ## What does this document do?
+  The runbook disables public accessibility for the Amazon RDS database instance you specify using 
+  the [ModifyDBInstance](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_ModifyDBInstance.html) API. It only performs the remediation on specific tags applied on the  rds instance i.e. Key=platform_rds_public_access Value=yes.
+
+  ## Input Parameters
+  * AutomationAssumeRole: (Required) The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) role that allows Systems Manager Automation to perform the actions on your behalf.
+  * DbiResourceId: (Required) The resource identifier for the DB instance you want to disable public accessibility.
+
+  ## Output Parameters
+  * DisablePubliclyAccessibleOnRDS.Response: The standard HTTP response from the ModifyDBInstance API.
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+outputs:
+  - DisablePubliclyAccessibleOnRDS.Response
+parameters:
+  AutomationAssumeRole:
+    type: String
+    description: (Required) The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) role that allows Systems Manager Automation to perform the actions on your behalf.
+    allowedPattern: '^arn:aws[a-z0-9-]*:iam::\d{12}:role\/[\w-\/.@+=,]{1,1017}$'
+  DbiResourceId:
+    type: String
+    description: (Required) The resource identifier for the DB instance you want to disable public accessibility.
+    allowedPattern: 'db-[A-Z0-9]{26}'
+mainSteps:
+  - name: GetRDSInstanceIdentifier
+    action: 'aws:executeAwsApi'
+    description: |
+      ## GetRDSInstanceIdentifier
+      Gathers the DB instance identifier from the DB instance resource identifier.
+      ## Outputs
+      * DbInstanceIdentifier: The Amazon RDS DB instance identifier.
+    timeoutSeconds: 600
+    isEnd: false
+    inputs:
+      Service: rds
+      Api: DescribeDBInstances
+      Filters:
+        - Name: dbi-resource-id
+          Values:
+            - '{{ DbiResourceId }}'
+    outputs:
+      - Name: DbInstanceIdentifier
+        Selector: '$.DBInstances[0].DBInstanceIdentifier'
+        Type: String
+  - name: checkTag
+    action: 'aws:executeScript'
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Runtime: python3.8
+      Handler: checkTag
+      InputPayload:
+        dbi-resource-id: '{{ DbiResourceId }}'
+      Script: |-
+        def checkTag(events,context):
+          import boto3
+          import botocore
+
+          #Initialize client
+          rds = boto3.client('rds',region_name='us-east-1')
+          rds_id = events['dbi-resource-id']
+          #GetRDSTags
+          try:
+            response = rds.describe_db_instances(
+                Filters=[
+                    {
+                        'Name': 'dbi-resource-id',
+                        'Values': [
+                            rds_id,
+                        ]
+                    },
+                ],)
+            #result.update({ })
+            maplist = response['DBInstances'][0]['TagList']
+            
+          except botocore.exceptions.ClientError as error:
+              raise error
+
+          for i in maplist:
+            if i['Key']=="platform_rds_public_access" and i['Value']=="yes":
+              return {"DB_Tag": True}
+            elif i['Key']=="platform_rds_public_access" and i['Value']=="no":
+              return {"DB_Tag": False}
+            else:
+              continue 
+    outputs:
+      - Name: DB_Tag
+        Selector: $.Payload.DB_Tag
+        Type: Boolean
+  - name: chooseAction
+    action: 'aws:branch'
+    inputs:
+      Choices:
+        - NextStep: sleep3
+          Variable: '{{checkTag.DB_Tag}}'
+          BooleanEquals: true
+      Default: VerifyDBInstanceStatus
+  - name: sleep3
+    action: 'aws:sleep'
+    isEnd: true
+    inputs:
+      Duration: PT1M
+  - name: VerifyDBInstanceStatus
+    action: 'aws:waitForAwsResourceProperty'
+    timeoutSeconds: 900
+    isEnd: false
+    description: |
+      ## VerifyDBInstanceStatus
+      Waits for and verifies the DB instances is in an AVAILABLE state. 
+    inputs:
+      Service: rds
+      Api: DescribeDBInstances
+      DBInstanceIdentifier: '{{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}'
+      PropertySelector: '$.DBInstances[0].DBInstanceStatus'
+      DesiredValues:
+        - available
+  - name: DisablePubliclyAccessibleOnRDS
+    action: 'aws:executeAwsApi'
+    description: |
+      ## DisablePubliclyAccessibleOnRDS
+      Disables public accessibility on your DB instance.
+      ## Outputs
+      * Response: The standard HTTP response from the ModifyDBInstance API.
+    timeoutSeconds: 600
+    isEnd: false
+    inputs:
+      Service: rds
+      Api: ModifyDBInstance
+      DBInstanceIdentifier: '{{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}'
+      PubliclyAccessible: false
+    outputs:
+      - Name: Response
+        Selector: $
+        Type: StringMap
+  - name: WaitForDBInstanceStatusToModify
+    action: 'aws:waitForAwsResourceProperty'
+    timeoutSeconds: 600
+    isEnd: false
+    description: |
+      ## WaitForDBInstanceStatusToModify
+      Waits for the DB instance to change to a MODIFYING state.
+    inputs:
+      Service: rds
+      Api: DescribeDBInstances
+      DBInstanceIdentifier: '{{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}'
+      PropertySelector: '$.DBInstances[0].DBInstanceStatus'
+      DesiredValues:
+        - modifying
+  - name: WaitForDBInstanceStatusToAvailableAfterModify
+    action: 'aws:waitForAwsResourceProperty'
+    timeoutSeconds: 600
+    isEnd: false
+    description: |
+      ## WaitForDBInstanceStatusToAvailableAfterModify
+      Waits for the DB instance to change to an AVAILABLE state
+    inputs:
+      Service: rds
+      Api: DescribeDBInstances
+      DBInstanceIdentifier: '{{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}'
+      PropertySelector: '$.DBInstances[0].DBInstanceStatus'
+      DesiredValues:
+        - available
+  - name: VerifyDBInstancePubliclyAccess
+    action: 'aws:assertAwsResourceProperty'
+    timeoutSeconds: 600
+    isEnd: true
+    description: |
+      ## VerifyDBInstancePubliclyAccess
+      Confirms public accessibility is disabled on the DB instance.
+    inputs:
+      Service: rds
+      Api: DescribeDBInstances
+      DBInstanceIdentifier: '{{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}'
+      PropertySelector: '$.DBInstances[0].PubliclyAccessible'
+      DesiredValues:
+        - 'False'
