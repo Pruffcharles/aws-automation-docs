@@ -15,7 +15,7 @@ def lambda_handler(events,context):
     regions = ["eu-west-1", "us-east-2"]
     tags = {"auto-delete":"no"}
     cross_account_role_name = "AWS-SystemsManager-AutomationExecutionRole"
-    sns_topic_arn = "arn:aws:sns:eu-west-1:527272939965:SSMAgent_PingStatus_Topic"
+    sns_topic_arn = "arn:aws:sns:eu-west-1:<account_id>:SSMAgent_PingStatus_Topic"
     status = {} 
     # initialize the cloudwatch client
     cw = boto3.client('cloudwatch', region_name=cw_central_dashboard)
@@ -36,7 +36,7 @@ def get_accounts(cross_account_role_name):
     try:    
         assumedRoleObject = sts_client.assume_role(
             RoleArn="arn:aws:iam::"+account+":role/"+cross_account_role_name,
-            RoleSessionName="adebac-Lambda"
+            RoleSessionName="PingStatusAssumeRole-Lambda"
             )
 
         credentials = assumedRoleObject['Credentials']
