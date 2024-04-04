@@ -11,11 +11,11 @@ logger = logging.getLogger()
             
 def lambda_handler(events,context):
     # define regions, cw_central_dashboard,tags, and cross_account_role_name where you want to monitor the managed nodes status and the tags for the specific managed nodes
-    cw_central_dashboard = "eu-west-1"
-    regions = ["eu-west-1", "us-east-2"]
-    tags = {"auto-delete":"no"}
-    cross_account_role_name = "AWS-SystemsManager-AutomationExecutionRole"
-    sns_topic_arn = "arn:aws:sns:eu-west-1:<account_id>:SSMAgent_PingStatus_Topic"
+    cw_central_dashboard = events["cw_central_dashboard"]
+    regions = events["regions"]
+    tags = events["tags"]
+    cross_account_role_name = events["cross_account_role_name"]
+    sns_topic_arn = events["sns_topic_arn"]
     status = {} 
     # initialize the cloudwatch client
     cw = boto3.client('cloudwatch', region_name=cw_central_dashboard)
@@ -25,13 +25,12 @@ def lambda_handler(events,context):
     publish_cloudwatch_metric(status, cw)
     create_alarm(sns_topic_arn,status,cw)
     create_custom_dashboard(status,cw,cw_central_dashboard) 
-    return status
+    return str(status)
 
 def get_accounts(cross_account_role_name):
     iam_client = boto3.client('iam')
     sts_client = boto3.client('sts')
     org_client = boto3.client('organizations')
-
     account = sts_client.get_caller_identity().get('Account')
     try:    
         assumedRoleObject = sts_client.assume_role(
@@ -64,7 +63,7 @@ def get_ping_status(regions, tags, status, accounts):
     for account in accounts:
         assumedRoleObject = sts_client.assume_role(
             RoleArn="arn:aws:iam::"+account+":role/AWS-SystemsManager-AutomationExecutionRole",
-            RoleSessionName="adebac-Lambda"
+            RoleSessionName="PingStatus-Lambda"
         )
         credentials = assumedRoleObject['Credentials']
 
@@ -104,7 +103,6 @@ def get_ping_status(regions, tags, status, accounts):
             # print(f"for account {account} and region {region} printing list from describe instances API {ec2_instances}")
             
             # get the SSM agent ping status of all instances that are registered in Systems Manager filter using tags
-            # create custom metric PingStatus for managed nodes
             # for managed instances that are not in Online state, set their PingStatus value to 1 (True), else set to 0 (False) 
             # for other ec2 instances not reporting to systems manager set their status as 'Missing' and PingStatus value to 1 (True)
 
@@ -128,13 +126,7 @@ def get_ping_status(regions, tags, status, accounts):
                         ],)
                     managed_nodes.extend(response['InstanceInformationList'])
 
-                # add ec2 instances that are not terminated 
-                # status.update({(instance['InstanceId'],account) : instance['PingStatus'] for instance in managed_nodes if instance['InstanceId'] in ec2_instances and ec2_instances_status[instance['InstanceId']] != "terminated"})
-                
-                # add hybrid nodes too
-                # status.update({(instance['InstanceId'],account) : instance['PingStatus'] for instance in managed_nodes if instance['InstanceId'] not in ec2_instances})
-                
-                # print(f"for region {region} printing list from DII API  {managed_nodes}")
+                # add ec2 instances that are not terminated and hybrid nodes
                 for instance in managed_nodes:
                     if instance['InstanceId'] in ec2_instances:
                         if ec2_instances_status[instance['InstanceId']] != "terminated":
@@ -149,9 +141,10 @@ def get_ping_status(regions, tags, status, accounts):
     print(f"final status list {status}")
     return
 
+# create custom metric PingStatus for tagged managed nodes in Clouwatch Metrics
 def publish_cloudwatch_metric(status,cw): 
     for instance in status:
-        print("Creating PingStatus Cloudwatch metric for " + status[instance][0])
+        print("Creating/publishing PingStatus Cloudwatch metric for " + instance[0])
         try:
             value = 0 if status[instance] == 'Online' else 1
             cw.put_metric_data(
@@ -171,6 +164,7 @@ def publish_cloudwatch_metric(status,cw):
             raise error 
     return 
 
+# create cloudwatch alarms for tagged managed nodes based on the PingStatus metrics and configure SNS alerts
 def create_alarm(sns_topic_arn,status,cw):
     for instance,account in status:
         AlarmName = 'SSMAgent_PingStatus-'+instance+"-"+account
@@ -206,6 +200,7 @@ def create_alarm(sns_topic_arn,status,cw):
                 raise error 
     return
 
+# create custom dashboard
 def create_custom_dashboard(status, cw, cw_central_dashboard):
     # Initialize CloudWatch client
     # cloudwatch = boto3.client('cloudwatch', region_name=cw_central_dashboard)
@@ -235,7 +230,7 @@ def create_custom_dashboard(status, cw, cw_central_dashboard):
                 ],
                 "view": "timeSeries",
                 "region": cw_central_dashboard,
-                "start": "-PT20M",
+                "start": "-PT30M",
                 "end": "P0D",
                 "stat": "Maximum",
                 "period": 300,
@@ -267,6 +262,3 @@ def create_custom_dashboard(status, cw, cw_central_dashboard):
         logger.exception("Couldn't create or update dashboard ", dashboard_name)
         raise error  
     return     
-            
-if __name__ == "__main__":
-    lambda_handler(None,None)
