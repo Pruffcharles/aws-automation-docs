@@ -1,50 +1,141 @@
 # Systems Manager automation runbook to patch instances only if it contains missing KBs.
 # Author : Charles Adebayo
-# V1 : July 2021
+# V2 : January 2025
 
-description: |-
-  Patch instances only if missing patches.  This solution scans the Windows server, checks if missing a patch, if missing, installs the patch. 
-  ---
 schemaVersion: '0.3'
-outputs:
-  - scan.missingPatches
+description: Install patches on instances only if missing patches.  This solution scans the Windows server, checks if missing a patch, if missing, installs the patch.
+assumeRole: '{{ AutomationAssumeRole }}'
 parameters:
   InstanceId:
     type: String
+    description: The ID of the EC2 instance
+  AutomationAssumeRole:
+    type: AWS::IAM::Role::Arn
+    description: (Optional) The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) role that allows Systems Manager Automation to perform the actions on your behalf. If no role is specified, Systems Manager Automation uses the permissions of the user that starts this runbook.
+    default: ''
 mainSteps:
-  - name: scan
-    action: 'aws:runCommand'
+  - name: WaitForInstanceManaged
+    action: aws:waitForAwsResourceProperty
+    timeoutSeconds: 300
+    nextStep: GetPlatform
+    isEnd: false
+    inputs:
+      Service: ssm
+      Api: DescribeInstanceInformation
+      InstanceInformationFilterList:
+        - key: InstanceIds
+          valueSet:
+            - '{{ InstanceId }}'
+      PropertySelector: $.InstanceInformationList[0].PingStatus
+      DesiredValues:
+        - Online
+  - name: GetPlatform
+    action: aws:executeAwsApi
+    nextStep: Scan
+    isEnd: false
+    onFailure: Abort
+    inputs:
+      Service: ssm
+      Api: DescribeInstanceInformation
+      Filters:
+        - Key: InstanceIds
+          Values:
+            - '{{ InstanceId }}'
+    outputs:
+      - Name: Platform
+        Selector: $.InstanceInformationList[0].PlatformType
+        Type: String
+  - name: Scan
+    action: aws:runCommand
+    nextStep: ExtractMissingCount
+    isEnd: false
     inputs:
       DocumentName: AWS-RunPatchBaseline
       InstanceIds:
         - '{{ InstanceId }}'
       Parameters:
         Operation: Scan
+  - name: ExtractMissingCount
+    action: aws:executeScript
+    timeoutSeconds: 300
+    nextStep: CheckIfPatchesMissing
+    isEnd: false
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: extract_missing_count
+      InputPayload:
+        CommandId: '{{Scan.CommandId}}'
+        Platform: '{{GetPlatform.Platform}}'
+      Script: |-
+        import re
+        import boto3
+        from botocore.errorfactory import ClientError
+
+        ssm_client = boto3.client("ssm")
+        def extract_missing_count(events,context) -> dict:
+          scan_command_id = events.get("CommandId")
+          intance_platform = events.get("Platform")
+          try:
+              response = ssm_client.list_command_invocations(
+                    CommandId=scan_command_id,
+                    Details=True
+                )
+          except botocore.exceptions.ClientError as error:
+              raise error
+          
+          plugin_name = get_plugin_name(intance_platform)
+          scan_output = get_plugin_output(response['CommandInvocations'][0], plugin_name)
+          pattern = r'MissingCount\s*:\s*(\d+)'
+          match = re.search(pattern, scan_output)
+          if match:
+              return {"MissingCount": int(match.group(1))}
+          return {"MissingCount": -1}
+
+        def get_plugin_name(platform):
+          if platform == "Windows":
+            return "PatchWindows"
+          elif platform == "Linux":
+            return "PatchLinux"
+          elif platform == "MacOS":
+            return "PatchMacOS"
+          else:
+            return None
+
+        def get_plugin_output(invocation, plugin_name):
+          if not plugin_name:
+            return None
+          for plugin in invocation.get('CommandPlugins', []):
+            if plugin['Name'] == plugin_name:
+                return plugin.get('Output')
+          return None
     outputs:
-      - Name: missingPatches
-        Type: String
-        Selector: $.Output
-  - name: checkIfPatchesMissing
-    action: 'aws:branch'
+      - Type: Integer
+        Name: MissingCount
+        Selector: $.Payload.MissingCount
+  - name: CheckIfPatchesMissing
+    action: aws:branch
     inputs:
       Choices:
-        - NextStep: runCommand2
-          Not:
-            Variable: '{{ scan.missingPatches }}'
-            Contains: 'MissingCount        : 0'
-        - NextStep: installPatches
-          Variable: '{{ scan.missingPatches }}'
-          Contains: 'MissingCount        : 0'
-  - name: installPatches
-    action: 'aws:runCommand'
+        - NextStep: InstallPatches
+          Variable: '{{ ExtractMissingCount.MissingCount }}'
+          NumericGreater: 0
+        - NextStep: Sleep
+          Variable: '{{ ExtractMissingCount.MissingCount }}'
+          NumericEquals: -1
+      Default: Sleep
+  - name: InstallPatches
+    action: aws:runCommand
+    nextStep: Sleep
+    isEnd: false
     inputs:
       DocumentName: AWS-RunPatchBaseline
       InstanceIds:
         - '{{ InstanceId }}'
       Parameters:
         Operation: Install
-  - name: runCommand2
+  - name: Sleep
     action: aws:sleep
-    inputs:
-      Duration: PT1M
     isEnd: true
+    inputs:
+      Duration: PT30S
